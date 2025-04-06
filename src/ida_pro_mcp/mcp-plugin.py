@@ -249,6 +249,7 @@ import ida_typeinf
 import ida_xref
 import ida_entry
 import idautils
+import ida_name
 
 class IDAError(Exception):
     def __init__(self, message: str):
@@ -511,6 +512,14 @@ def get_function_by_address(
 def get_current_address() -> str:
     """Get the address currently selected by the user"""
     return hex(idaapi.get_screen_ea())
+
+@jsonrpc
+@idaread
+def get_address_by_name(
+    name: Annotated[str, "Name of the address to get"]
+) -> Function:
+    """Get the Address by its Name"""
+    return hex(ida_name.get_name_ea(0, name))
 
 @jsonrpc
 @idaread
