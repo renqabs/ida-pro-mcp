@@ -38,8 +38,11 @@ Available functionality:
 - [IDA Pro](https://hex-rays.com/ida-pro) (8.3 or higher, 9 recommended)
 - Supported MCP Client (pick one you like)
   - [Cline](https://cline.bot)
-  - [Roo Code](https://marketplace.visualstudio.com/items?itemName=RooVeterinaryInc.roo-cline)
+  - [Roo Code](https://roocode.com)
   - [Claude](https://claude.ai/download)
+  - [Cursor](https://cursor.com)
+  - [VSCode Agent Mode](https://github.blog/news-insights/product-news/github-copilot-agent-mode-activated/)
+  - [Other MCP Clients](https://modelcontextprotocol.io/clients#example-clients)
 
 ## Installation
 
@@ -220,7 +223,7 @@ https://github.com/user-attachments/assets/951de823-88ea-4235-adcb-9257e316ae64
 To test the MCP server itself:
 
 ```sh
-uv run fastmcp dev server.py
+uv run mcp dev src/ida_pro_mcp/server.py
 ```
 
 This will open a web interface at http://localhost:5173 and allow you to interact with the MCP tools for testing.
@@ -229,4 +232,10 @@ For testing I create a symbolic link to the IDA plugin and then POST a JSON-RPC 
 
 ```sh
 uv run ida-pro-mcp --install
+```
+
+Generate the changelog of direct commits to `main`:
+
+```sh
+git log --first-parent --no-merges 1.2.0..main "--pretty=- %s"
 ```
