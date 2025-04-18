@@ -20,9 +20,14 @@ class JSONRPCError(Exception):
 class RPCRegistry:
     def __init__(self):
         self.methods: dict[str, Callable] = {}
+        self.unsafe: set[str] = set()
 
     def register(self, func: Callable) -> Callable:
         self.methods[func.__name__] = func
+        return func
+
+    def mark_unsafe(self, func: Callable) -> Callable:
+        self.unsafe.add(func.__name__)
         return func
 
     def dispatch(self, method: str, params: Any) -> Any:
@@ -75,6 +80,10 @@ def jsonrpc(func: Callable) -> Callable:
     """Decorator to register a function as a JSON-RPC method"""
     global rpc_registry
     return rpc_registry.register(func)
+
+def unsafe(func: Callable) -> Callable:
+    """Decorator to register mark a function as unsafe"""
+    return rpc_registry.mark_unsafe(func)
 
 class JSONRPCRequestHandler(http.server.BaseHTTPRequestHandler):
     def send_jsonrpc_error(self, code: int, message: str, id: Any = None):
@@ -1015,6 +1024,7 @@ def set_local_variable_type(
 
 @jsonrpc
 @idaread
+@unsafe
 def dbg_get_registers() -> list[dict[str, str]]:
     """Get all registers and their values. This function is only available when debugging."""
     result = []
@@ -1043,6 +1053,7 @@ def dbg_get_registers() -> list[dict[str, str]]:
 
 @jsonrpc
 @idaread
+@unsafe
 def dbg_get_call_stack() -> list[dict[str, str]]:
     """Get the current call stack."""
     callstack = []
@@ -1105,6 +1116,7 @@ def list_breakpoints():
 
 @jsonrpc
 @idaread
+@unsafe
 def dbg_list_breakpoints():
     """
     List all breakpoints in the program.
@@ -1113,6 +1125,7 @@ def dbg_list_breakpoints():
 
 @jsonrpc
 @idaread
+@unsafe
 def dbg_start_process() -> str:
     """Start the debugger"""
     if idaapi.start_process("", "", ""):
@@ -1121,6 +1134,7 @@ def dbg_start_process() -> str:
 
 @jsonrpc
 @idaread
+@unsafe
 def dbg_exit_process() -> str:
     """Exit the debugger"""
     if idaapi.exit_process():
@@ -1129,6 +1143,7 @@ def dbg_exit_process() -> str:
 
 @jsonrpc
 @idaread
+@unsafe
 def dbg_continue_process() -> str:
     """Continue the debugger"""
     if idaapi.continue_process():
@@ -1137,6 +1152,7 @@ def dbg_continue_process() -> str:
 
 @jsonrpc
 @idaread
+@unsafe
 def dbg_run_to(
     address: Annotated[str, "Run the debugger to the specified address"],
 ) -> str:
@@ -1148,6 +1164,7 @@ def dbg_run_to(
 
 @jsonrpc
 @idaread
+@unsafe
 def dbg_set_breakpoint(
     address: Annotated[str, "Set a breakpoint at the specified address"],
 ) -> str:
@@ -1163,6 +1180,7 @@ def dbg_set_breakpoint(
 
 @jsonrpc
 @idaread
+@unsafe
 def dbg_delete_breakpoint(
     address: Annotated[str, "del a breakpoint at the specified address"],
 ) -> str:
@@ -1174,6 +1192,7 @@ def dbg_delete_breakpoint(
 
 @jsonrpc
 @idaread
+@unsafe
 def dbg_enable_breakpoint(
     address: Annotated[str, "Enable or disable a breakpoint at the specified address"],
     enable: Annotated[bool, "Enable or disable a breakpoint"],
