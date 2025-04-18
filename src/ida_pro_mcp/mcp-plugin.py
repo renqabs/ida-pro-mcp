@@ -518,6 +518,14 @@ def get_function_by_address(
     """Get a function by its address"""
     return get_function(parse_address(address))
 
+ @jsonrpc
+ @idaread
+ def get_address_by_name(
+     name: Annotated[str, "Name of the address to get"]
+ ) -> Function:
+     """Get the Address by its Name"""
+     return hex(ida_name.get_name_ea(0, name))
+
 @jsonrpc
 @idaread
 def get_current_address() -> str:
