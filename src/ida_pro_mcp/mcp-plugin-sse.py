@@ -74,109 +74,6 @@ def jsonrpc(func: Callable) -> Callable:
     """Decorator to register a function as a JSON-RPC method"""
     global rpc_registry
     return rpc_registry.register(func)
-
-class JSONRPCRequestHandler(http.server.BaseHTTPRequestHandler):
-    def send_jsonrpc_error(self, code: int, message: str, id: Any = None):
-        response = {
-            "jsonrpc": "2.0",
-            "error": {
-                "code": code,
-                "message": message
-            }
-        }
-        if id is not None:
-            response["id"] = id
-        response_body = json.dumps(response).encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", len(response_body))
-        self.end_headers()
-        self.wfile.write(response_body)
-
-    def do_POST(self):
-        global rpc_registry
-
-        parsed_path = urlparse(self.path)
-        if parsed_path.path != "/mcp":
-            self.send_jsonrpc_error(-32098, "Invalid endpoint", None)
-            return
-
-        content_length = int(self.headers.get("Content-Length", 0))
-        if content_length == 0:
-            self.send_jsonrpc_error(-32700, "Parse error: missing request body", None)
-            return
-
-        request_body = self.rfile.read(content_length)
-        try:
-            request = json.loads(request_body)
-        except json.JSONDecodeError:
-            self.send_jsonrpc_error(-32700, "Parse error: invalid JSON", None)
-            return
-
-        # Prepare the response
-        response = {
-            "jsonrpc": "2.0"
-        }
-        if request.get("id") is not None:
-            response["id"] = request.get("id")
-
-        try:
-            # Basic JSON-RPC validation
-            if not isinstance(request, dict):
-                raise JSONRPCError(-32600, "Invalid Request")
-            if request.get("jsonrpc") != "2.0":
-                raise JSONRPCError(-32600, "Invalid JSON-RPC version")
-            if "method" not in request:
-                raise JSONRPCError(-32600, "Method not specified")
-
-            # Dispatch the method
-            result = rpc_registry.dispatch(request["method"], request.get("params", []))
-            response["result"] = result
-
-        except JSONRPCError as e:
-            response["error"] = {
-                "code": e.code,
-                "message": e.message
-            }
-            if e.data is not None:
-                response["error"]["data"] = e.data
-        except IDAError as e:
-            response["error"] = {
-                "code": -32000,
-                "message": e.message,
-            }
-        except Exception as e:
-            traceback.print_exc()
-            response["error"] = {
-                "code": -32603,
-                "message": "Internal error (please report a bug)",
-                "data": traceback.format_exc(),
-            }
-
-        try:
-            response_body = json.dumps(response).encode("utf-8")
-        except Exception as e:
-            traceback.print_exc()
-            response_body = json.dumps({
-                "error": {
-                    "code": -32603,
-                    "message": "Internal error (please report a bug)",
-                    "data": traceback.format_exc(),
-                }
-            }).encode("utf-8")
-
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", len(response_body))
-        self.end_headers()
-        self.wfile.write(response_body)
-
-    def log_message(self, format, *args):
-        # Suppress logging
-        pass
-
-class MCPHTTPServer(http.server.HTTPServer):
-    allow_reuse_address = False
     
 
 
@@ -760,12 +657,12 @@ def set_comment(
     if address == cfunc.entry_ea:
         idc.set_func_cmt(address, comment, True)
         cfunc.refresh_func_ctext()
-        return
+        return "success"
 
     eamap = cfunc.get_eamap()
     if address not in eamap:
-        print(f"Failed to set decompiler comment at {hex(address)}")
-        return
+        # print(f"Failed to set decompiler comment at {hex(address)}")
+        return f"Failed to set decompiler comment at {hex(address)}"
     nearest_ea = eamap[address][0].ea
 
     # Remove existing orphan comments
@@ -782,10 +679,11 @@ def set_comment(
         cfunc.save_user_cmts()
         cfunc.refresh_func_ctext()
         if not cfunc.has_orphan_cmts():
-            return
+            return "success"
         cfunc.del_orphan_cmts()
         cfunc.save_user_cmts()
-    print(f"Failed to set decompiler comment at {hex(address)}")
+    # print(f"Failed to set decompiler comment at {hex(address)}")
+    return f"Failed to set decompiler comment at {hex(address)}"
 
 def refresh_decompiler_widget():
     widget = ida_kernwin.get_current_widget()
@@ -814,6 +712,7 @@ def rename_local_variable(
     if not ida_hexrays.rename_lvar(func.start_ea, old_name, new_name):
         raise IDAError(f"Failed to rename local variable {old_name} in function {hex(func.start_ea)}")
     refresh_decompiler_ctext(func.start_ea)
+    return "success"
 
 @jsonrpc
 @idawrite
@@ -826,6 +725,7 @@ def rename_global_variable(
     if not idaapi.set_name(ea, new_name):
         raise IDAError(f"Failed to rename global variable {old_name} to {new_name}")
     refresh_decompiler_ctext(ea)
+    return "success"
 
 @jsonrpc
 @idawrite
@@ -840,7 +740,8 @@ def set_global_variable_type(
         raise IDAError(f"Parsed declaration is not a variable type")
     if not ida_typeinf.apply_tinfo(ea, tif, ida_typeinf.PT_SIL):
         raise IDAError(f"Failed to apply type")
-
+    return "success"
+    
 @jsonrpc
 @idawrite
 def rename_function(
@@ -854,6 +755,7 @@ def rename_function(
     if not idaapi.set_name(func.start_ea, new_name):
         raise IDAError(f"Failed to rename function {hex(func.start_ea)} to {new_name}")
     refresh_decompiler_ctext(func.start_ea)
+    return "success"
 
 @jsonrpc
 @idawrite
@@ -872,6 +774,7 @@ def set_function_prototype(
         if not ida_typeinf.apply_tinfo(func.start_ea, tif, ida_typeinf.PT_SIL):
             raise IDAError(f"Failed to apply type")
         refresh_decompiler_ctext(func.start_ea)
+        return "success"
     except Exception as e:
         raise IDAError(f"Failed to parse prototype string: {prototype}")
 
@@ -964,6 +867,7 @@ def set_local_variable_type(
     if not ida_hexrays.modify_user_lvars(func.start_ea, modifier):
         raise IDAError(f"Failed to modify local variable: {variable_name}")
     refresh_decompiler_ctext(func.start_ea)
+    return "success"
     
 import inspect
 import logging
