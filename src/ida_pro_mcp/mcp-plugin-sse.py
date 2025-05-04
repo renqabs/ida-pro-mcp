@@ -313,7 +313,7 @@ def get_function(address: int, *, raise_error=True) -> Function:
     fn = idaapi.get_func(address)
     if fn is None:
         if raise_error:
-            raise IDAError(f"No function found at address {hex(address)}")
+            return f"No function found at address {hex(address)}"
         return None
 
     try:
@@ -354,7 +354,7 @@ def get_function_by_name(
         if name in DEMANGLED_TO_EA:
             function_address = DEMANGLED_TO_EA[name]
         else:
-            raise IDAError(f"No function found with name {name}")
+            return f"No function found with name {name}"
     return get_function(function_address)
 
 @jsonrpc
@@ -401,7 +401,7 @@ def convert_number(
     try:
         value = int(text, 0)
     except ValueError:
-        raise IDAError(f"Invalid number: {text}")
+        return f"Invalid number: {text}"
 
     # Estimate the size of the number
     if not size:
@@ -417,7 +417,7 @@ def convert_number(
     try:
         bytes = value.to_bytes(size, "little", signed=True)
     except OverflowError:
-        raise IDAError(f"Number {text} is too big for {size} bytes")
+        return f"Number {text} is too big for {size} bytes"
 
     # Convert the bytes to ASCII
     ascii = ""
@@ -508,11 +508,11 @@ def search_strings(
     try:
         pattern = re.compile(pattern_str)
     except Exception as e:
-        raise ValueError(f"Regular expression syntax error, reason is {e}")
+        return f"Regular expression syntax error, reason is {e}"
     try:
         matched_strings = [s for s in strings if s["string"] and re.search(pattern, s["string"])]
     except Exception as e:
-        raise ValueError(f"The regular match failed, reason is {e}")
+        return f"The regular match failed, reason is {e}"
     return paginate(matched_strings, offset, count)
 
 @jsonrpc
@@ -540,7 +540,7 @@ def decompile_checked(address: int) -> ida_hexrays.cfunc_t:
             message += f": {error.str}"
         if error.errea != idaapi.BADADDR:
             message += f" (address: {hex(error.errea)})"
-        raise IDAError(message)
+        return message
     return cfunc
 
 @jsonrpc
@@ -585,7 +585,7 @@ def disassemble_function(
     start = parse_address(start_address)
     func = idaapi.get_func(start)
     if not func:
-        raise IDAError(f"No function found containing address {start_address}")
+        return f"No function found containing address {start_address}"
     if is_window_active():
         ida_kernwin.jumpto(start)
 
@@ -647,7 +647,7 @@ def set_comment(
     address = parse_address(address)
 
     if not idaapi.set_cmt(address, comment, False):
-        raise IDAError(f"Failed to set disassembly comment at {hex(address)}")
+        return f"Failed to set disassembly comment at {hex(address)}"
 
     # Reference: https://cyber.wtf/2019/03/22/using-ida-python-to-analyze-trickbot/
     # Check if the address corresponds to a line
@@ -708,9 +708,9 @@ def rename_local_variable(
     """Rename a local variable in a function"""
     func = idaapi.get_func(parse_address(function_address))
     if not func:
-        raise IDAError(f"No function found at address {function_address}")
+        return f"No function found at address {function_address}"
     if not ida_hexrays.rename_lvar(func.start_ea, old_name, new_name):
-        raise IDAError(f"Failed to rename local variable {old_name} in function {hex(func.start_ea)}")
+        return f"Failed to rename local variable {old_name} in function {hex(func.start_ea)}"
     refresh_decompiler_ctext(func.start_ea)
     return "success"
 
@@ -723,7 +723,7 @@ def rename_global_variable(
     """Rename a global variable"""
     ea = idaapi.get_name_ea(idaapi.BADADDR, old_name)
     if not idaapi.set_name(ea, new_name):
-        raise IDAError(f"Failed to rename global variable {old_name} to {new_name}")
+        return f"Failed to rename global variable {old_name} to {new_name}"
     refresh_decompiler_ctext(ea)
     return "success"
 
@@ -737,9 +737,9 @@ def set_global_variable_type(
     ea = idaapi.get_name_ea(idaapi.BADADDR, variable_name)
     tif = ida_typeinf.tinfo_t(new_type, None, ida_typeinf.PT_SIL)
     if not tif:
-        raise IDAError(f"Parsed declaration is not a variable type")
+        return f"Parsed declaration is not a variable type"
     if not ida_typeinf.apply_tinfo(ea, tif, ida_typeinf.PT_SIL):
-        raise IDAError(f"Failed to apply type")
+        return f"Failed to apply type"
     return "success"
     
 @jsonrpc
@@ -751,9 +751,9 @@ def rename_function(
     """Rename a function"""
     func = idaapi.get_func(parse_address(function_address))
     if not func:
-        raise IDAError(f"No function found at address {function_address}")
+        return f"No function found at address {function_address}"
     if not idaapi.set_name(func.start_ea, new_name):
-        raise IDAError(f"Failed to rename function {hex(func.start_ea)} to {new_name}")
+        return f"Failed to rename function {hex(func.start_ea)} to {new_name}"
     refresh_decompiler_ctext(func.start_ea)
     return "success"
 
@@ -766,17 +766,17 @@ def set_function_prototype(
     """Set a function's prototype"""
     func = idaapi.get_func(parse_address(function_address))
     if not func:
-        raise IDAError(f"No function found at address {function_address}")
+        return f"No function found at address {function_address}"
     try:
         tif = ida_typeinf.tinfo_t(prototype, None, ida_typeinf.PT_SIL)
         if not tif.is_func():
-            raise IDAError(f"Parsed declaration is not a function type")
+            return f"Parsed declaration is not a function type"
         if not ida_typeinf.apply_tinfo(func.start_ea, tif, ida_typeinf.PT_SIL):
-            raise IDAError(f"Failed to apply type")
+            return f"Failed to apply type"
         refresh_decompiler_ctext(func.start_ea)
         return "success"
     except Exception as e:
-        raise IDAError(f"Failed to parse prototype string: {prototype}")
+        return f"Failed to parse prototype string: {prototype}"
 
 class my_modifier_t(ida_hexrays.user_lvar_modifier_t):
     def __init__(self, var_name: str, new_type: ida_typeinf.tinfo_t):
@@ -837,7 +837,7 @@ def declare_c_type(
 
     pretty_messages = "\n".join(messages)
     if errors > 0:
-        raise IDAError(f"Failed to parse type:\n{c_declaration}\n\nErrors:\n{pretty_messages}")
+        return f"Failed to parse type:\n{c_declaration}\n\nErrors:\n{pretty_messages}"
     return f"success\n\nInfo:\n{pretty_messages}"
 
 @jsonrpc
@@ -857,15 +857,15 @@ def set_local_variable_type(
             # parse_decl requires semicolon for the type
             ida_typeinf.parse_decl(new_tif, None, new_type+";", ida_typeinf.PT_SIL)
         except Exception:
-            raise IDAError(f"Failed to parse type: {new_type}")
+            return f"Failed to parse type: {new_type}"
     func = idaapi.get_func(parse_address(function_address))
     if not func:
-        raise IDAError(f"No function found at address {function_address}")
+        return f"No function found at address {function_address}"
     if not ida_hexrays.rename_lvar(func.start_ea, variable_name, variable_name):
-        raise IDAError(f"Failed to find local variable: {variable_name}")
+        return f"Failed to find local variable: {variable_name}"
     modifier = my_modifier_t(variable_name, new_tif)
     if not ida_hexrays.modify_user_lvars(func.start_ea, modifier):
-        raise IDAError(f"Failed to modify local variable: {variable_name}")
+        return f"Failed to modify local variable: {variable_name}"
     refresh_decompiler_ctext(func.start_ea)
     return "success"
     
